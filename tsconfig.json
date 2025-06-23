@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es2016", // O "es2017", "es2018", "es2020", etc.
+    "module": "commonjs", // Para Node.js
+    "esModuleInterop": true, // Importante para las importaciones de CommonJS
+    "forceConsistentCasingInFileNames": true,
+    "strict": true, // ¡Idealmente true para buena práctica!
+    "skipLibCheck": true, // Puede ser útil para ignorar errores en librerías externas por ahora
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/types" 
+    ]
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
