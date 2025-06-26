@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import movieImportRoutes from './routes/movieImportRoutes';
 import movieRoutes from './routes/movieRoutes';
+import commentRoutes from './routes/commentRoutes';
 import AppError from './utils/AppError'; // Adjust path
 import './config/passport'; // 
 import { importPopularMovies } from './utils/movieImporter'; 
@@ -41,11 +42,13 @@ mongoose.connect(MONGO_URI)
     console.error('Error de conexión a MongoDB:', err);
     process.exit(1); // Sale de la aplicación si no puede conectar a la DB
   });
+  
 // Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/import-movies', movieImportRoutes);
 app.use('/api/movies', movieRoutes);
+app.use('/api/comments', commentRoutes);
 
 
 // Manejo de errores (opcional, pero recomendado)

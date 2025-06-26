@@ -12,6 +12,7 @@ const router: Router = Router();
 interface RegisterRequestBody {
   email: string;
   password: string;
+  username: string;
 }
 interface LoginRequestBody {
   email: string;
@@ -20,17 +21,22 @@ interface LoginRequestBody {
 // Ruta de registro usando el tipo RequestHandler para mayor claridad
 router.post('/register', (async (req: Request<any, any, RegisterRequestBody>, res: Response) => {
     try {
-        const { email, password } = req.body;
-        const newUser = new User({ email, password });
+        const { email, password, username } = req.body; 
+        const newUser = new User({ email, password, username });
         await newUser.save();
         res.status(201).json({ message: 'Usuario registrado exitosamente.' });
-    } catch (error: any) {
+   } catch (error: any) {
         if (error.code === 11000) {
-            return res.status(409).json({ message: 'El email ya está registrado.' });
+            // Check if it's an email or username duplicate
+            let message = 'El email ya está registrado.';
+            if (error.keyPattern && error.keyPattern.username) {
+                message = 'El nombre de usuario ya está en uso.';
+            }
+            return res.status(409).json({ message });
         }
         res.status(500).json({ message: 'Error al registrar usuario.', error: error.message });
     }
-}) as RequestHandler<any, any, RegisterRequestBody>); // Aplica RequestHandler explícitamente aquí
+}) as RequestHandler<any, any, RegisterRequestBody>);
 
 router.post('/login', (
     req: Request<any, any, LoginRequestBody>,
