@@ -67,9 +67,10 @@ router.post('/login', (
                 return res.status(500).json({ message: 'Error de configuración del servidor.' });
             }
 
-            const token = jwt.sign({ id: user._id, email: user.email }, secret, { expiresIn: '1h' });
+               const token = jwt.sign({ id: user._id, email: user.email, username: user.username }, secret, { expiresIn: '1h' });
+
             console.log('Login exitoso, token generado.'); // <--- AÑADE ESTA LÍNEA
-            return res.json({ user: { id: user._id, email: user.email }, token });
+             return res.json({ user: { id: user._id, email: user.email, username: user.username }, token });
         });
     })(req, res, next);
 });

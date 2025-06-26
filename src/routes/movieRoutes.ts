@@ -1,19 +1,17 @@
 // src/routes/movieRoutes.ts
 import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import Movie, { IMovie } from '../models/Movie';
-import { SortOrder } from 'mongoose'; // Importa SortOrder de mongoose
-import passport from 'passport'; // Para proteger la ruta si es necesario
-
+import Comment from '../models/Comment';
+import { SortOrder } from 'mongoose';
+import passport from 'passport';
+import mongoose from 'mongoose'; // Necesario para mongoose.Types.ObjectId
+import { getMovieById } from '../controllers/movieController';
 const router: Router = Router();
 
-// === Async Handler para manejar errores en rutas async ===
-const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) =>
+const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) =>
     (req: Request, res: Response, next: NextFunction) =>
         Promise.resolve(fn(req, res, next)).catch(next);
-// =========================================================
 
-// Middleware para proteger las rutas (usando JwtStrategy)
-// Lo usaremos aquí para asegurar que solo usuarios autenticados puedan acceder al listado
 const authenticateJWT: RequestHandler = (req, res, next) => {
     passport.authenticate('jwt', { session: false }, (err: Error, user: any, info: { message?: string }) => {
         if (err) {
@@ -28,80 +26,156 @@ const authenticateJWT: RequestHandler = (req, res, next) => {
     })(req, res, next);
 };
 
-// Ruta para obtener películas con filtros y ordenamiento
-// GET /api/movies?search=query&genreId=12,28&minRating=7&startYear=2020&endYear=2023&sortBy=release_date&order=desc
+router.get('/:id', authenticateJWT, asyncHandler(getMovieById)); 
+
 router.get('/', authenticateJWT, asyncHandler(async (req: Request, res: Response) => {
     const {
-        search,        // Búsqueda por título (parcial)
-        genreId,       // Filtrar por uno o más IDs de género (separados por coma)
-        minRating,     // Filtrar por puntuación mínima
-        startYear,     // Filtrar por año de lanzamiento (inicio)
-        endYear,       // Filtrar por año de lanzamiento (fin)
-        sortBy = 'release_date', // Campo para ordenar (por defecto: release_date)
-        order = 'desc', // Orden (asc/desc, por defecto: desc)
+        search,
+        genreId,
+        minRating,
+        startYear,
+        endYear,
+        sortBy = 'release_date',
+        order = 'desc',
+        type, // e.g., 'latest', 'popular', 'upcoming', 'category', 'genre', 'all'
+        page = '1', // Nuevo: Parámetro para la paginación, por defecto página 1
+        pageSize = '20' // Nuevo: Parámetro para el tamaño de página, por defecto 20 elementos
     } = req.query;
 
+    const pageNum = parseInt(page as string);
+    const pageSizeNum = parseInt(pageSize as string);
+    const skip = (pageNum - 1) * pageSizeNum;
+
     const query: any = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Inicio del día de hoy
 
-    // 1. Filtro por búsqueda (title)
-    if (search && typeof search === 'string') {
-        query.title = { $regex: search, $options: 'i' }; // Búsqueda insensible a mayúsculas/minúsculas
-    }
+    let movies: IMovie[] = [];
+    
+    // Determina si es un tipo de "sección" específica (latest, popular, upcoming)
+    // que generalmente se muestran con un límite fijo en la pantalla principal,
+    // o si es una consulta de lista completa (como 'all', búsqueda o filtro sin 'type' de sección).
+    const isSectionType = ['latest', 'popular', 'upcoming'].includes(type as string);
+    // effectiveLimit será el límite para las secciones, 0 si no se aplica un límite fijo
+    // (en cuyo caso se usará skip/pageSize para paginación).
+    const effectiveLimit = isSectionType ? pageSizeNum : 0; 
 
-    // 2. Filtro por géneros (genres)
-    // Asume que tienes un array de IDs de género de TMDB
-    // Si TMDB da '28' para Acción, y tienes [28, 12, 16] en tu Movie.genres
-    if (genreId && typeof genreId === 'string') {
-        const genreIdsArray = genreId.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
-        if (genreIdsArray.length > 0) {
-            // $in para OR de varios géneros, $all para AND
-            query.genres = { $in: genreIdsArray };
+    if (type === 'popular') {
+        const popularMovies = await Movie.aggregate([
+            {
+                $lookup: {
+                    from: 'comments', // Nombre de tu colección de comentarios en MongoDB
+                    localField: '_id',
+                    foreignField: 'movie', // Asegúrate de que esto coincide con el campo en tu modelo Comment
+                    as: 'commentsData'
+                }
+            },
+            {
+                $addFields: {
+                    commentCount: { $size: '$commentsData' }
+                }
+            },
+            { $sort: { commentCount: -1, vote_average: -1, release_date: -1 } },
+            // Aplica límite si es un tipo de sección
+            ...(effectiveLimit > 0 ? [{ $limit: effectiveLimit }] : []),
+            {
+                $project: {
+                    _id: 1, // Incluye todos los campos que necesitas para IMovie
+                    title: 1,
+                    overview: 1,
+                    release_date: 1,
+                    vote_average: 1,
+                    poster_path: 1,
+                    backdrop_path: 1,
+                    genres: 1,
+                    runtime: 1,
+                    tmdbId: 1,
+                }
+            },
+        ]);
+
+        movies = popularMovies as IMovie[];
+
+        // Fallback para populares si hay pocos comentarios.
+        // Este fallback también debe respetar el 'effectiveLimit'.
+        if (movies.length < effectiveLimit && movies.length < 5) { // Si obtuvimos menos de lo solicitado o muy pocas.
+            console.log('No se encontraron suficientes películas con comentarios. Volviendo a películas aleatorias/recientes.');
+            const numToFetch = effectiveLimit - movies.length;
+            const fallbackMovies = await Movie.find({})
+                .sort({ release_date: -1, vote_average: -1 })
+                .limit(numToFetch)
+                .skip(Math.floor(Math.random() * Math.max(0, (await Movie.countDocuments()) - numToFetch)));
+            
+            const existingMovieIds = new Set(movies.map(m => (m._id as mongoose.Types.ObjectId).toString()));
+            const uniqueFallbackMovies = fallbackMovies.filter(fm => !existingMovieIds.has((fm._id as mongoose.Types.ObjectId).toString()));
+            
+            movies = [...movies, ...uniqueFallbackMovies].slice(0, effectiveLimit);
         }
-    }
 
-    // 3. Filtro por puntuación mínima (vote_average)
-    if (minRating && typeof minRating === 'string') {
-        const minRatingNum = parseFloat(minRating);
-        if (!isNaN(minRatingNum)) {
-            query.vote_average = { $gte: minRatingNum };
-        }
-    }
-
-    // 4. Filtro por rango de años de lanzamiento (release_date)
-    const dateQuery: any = {};
-    if (startYear && typeof startYear === 'string') {
-        const start = new Date(parseInt(startYear), 0, 1); // Enero 1 del año de inicio
-        dateQuery.$gte = start;
-    }
-    if (endYear && typeof endYear === 'string') {
-        const end = new Date(parseInt(endYear), 11, 31, 23, 59, 59); // Diciembre 31 del año de fin
-        dateQuery.$lte = end;
-    }
-    if (Object.keys(dateQuery).length > 0) {
-        query.release_date = dateQuery;
-    }
-
-    // 5. Ordenamiento (Sorting)
-    const sortOptions: { [key: string]: SortOrder } = {}; // Tipado para Mongoose SortOrder
-    const validSortFields = ['release_date', 'vote_average', 'title']; // Campos permitidos para ordenar
-
-    if (validSortFields.includes(sortBy as string)) {
-        sortOptions[sortBy as string] = order === 'asc' ? 1 : -1; // 1 para ASC, -1 para DESC
     } else {
-        // Por defecto, si el campo no es válido, ordena por release_date descendente
-        sortOptions.release_date = -1;
+        // Lógica existente para otros filtros (búsqueda, género, rangos de fechas, etc.)
+        if (search && typeof search === 'string') {
+            query.title = { $regex: search, $options: 'i' };
+        }
+
+        if (genreId && typeof genreId === 'string') {
+            const genreIdsArray = genreId.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+            if (genreIdsArray.length > 0) {
+                query.genres = { $in: genreIdsArray };
+            }
+        }
+
+        if (minRating && typeof minRating === 'string') {
+            const minRatingNum = parseFloat(minRating);
+            if (!isNaN(minRatingNum)) {
+                query.vote_average = { $gte: minRatingNum };
+            }
+        }
+
+        const dateQuery: any = query.release_date || {};
+
+        if (startYear && typeof startYear === 'string') {
+            const start = new Date(parseInt(startYear), 0, 1);
+            dateQuery.$gte = start;
+        }
+        if (endYear && typeof endYear === 'string') {
+            const end = new Date(parseInt(endYear), 11, 31, 23, 59, 59);
+            dateQuery.$lte = end;
+        }
+
+        if (type === 'latest') {
+            dateQuery.$lte = today; // Películas estrenadas hasta hoy
+            // El `effectiveLimit` manejará el límite para esta sección.
+        } else if (type === 'upcoming') {
+            dateQuery.$gte = new Date(today.getTime() + 24 * 60 * 60 * 1000); // Películas estrenadas después de hoy
+            // El `effectiveLimit` manejará el límite para esta sección.
+        }
+
+        if (Object.keys(dateQuery).length > 0) {
+            query.release_date = dateQuery;
+        }
+
+        const sortOptions: { [key: string]: SortOrder } = {};
+        const validSortFields = ['release_date', 'vote_average', 'title'];
+
+        if (validSortFields.includes(sortBy as string)) {
+            sortOptions[sortBy as string] = order === 'asc' ? 1 : -1;
+        } else {
+            sortOptions.release_date = -1; // Ordenamiento por defecto para consultas generales
+        }
+
+        let queryChain = Movie.find(query).sort(sortOptions);
+
+        if (!isSectionType) { // Aplica paginación para consultas que no son de sección (como listas "Ver todo")
+            queryChain = queryChain.skip(skip).limit(pageSizeNum);
+        } else if (effectiveLimit > 0) { // Aplica un límite fijo para consultas de sección
+            queryChain = queryChain.limit(effectiveLimit);
+        }
+
+        movies = await queryChain.exec();
     }
 
-    try {
-        const movies = await Movie.find(query)
-                                  .sort(sortOptions)
-                                  .exec(); // Usar .exec() para Promesas
-
-        res.status(200).json(movies);
-    } catch (error: any) {
-        console.error('Error al obtener películas:', error.message);
-        res.status(500).json({ message: 'Error al obtener películas.', error: error.message });
-    }
+    res.status(200).json(movies);
 }));
 
 export default router;

@@ -1,17 +1,12 @@
 // src/models/Comment.ts
-import mongoose, { Schema, Document } from 'mongoose';
-
-// Assuming you have an IMovie interface, if not, adjust as needed.
-// For simplicity, we'll just refer to it by its ObjectId.
-// If you have a separate Series model, you might make 'movie' an optional 'content' field
-// and add a 'contentType' field (e.g., 'Movie', 'Series'). For now, let's assume 'movie'.
+import mongoose, { Schema, Document, Types } from 'mongoose'; // Ensure 'Types' is imported if used directly like Types.ObjectId
 
 import { IUser } from './User'; // Import IUser for type checking
 import { IMovie } from './Movie'; // Import IMovie for type checking (optional, but good practice)
 
 export interface IComment extends Document {
-    user: mongoose.Types.ObjectId | IUser; // Reference to the User who made the comment
-    movie: mongoose.Types.ObjectId | IMovie; // Reference to the Movie the comment is for
+    user: Types.ObjectId | IUser; // Reference to the User who made the comment
+    movie: Types.ObjectId | IMovie; // Reference to the Movie the comment is for
     text: string;
     rating: number; // Score/rating given by the user for the movie/series (e.g., 1-10)
     createdAt: Date;
@@ -24,7 +19,7 @@ const CommentSchema: Schema = new Schema({
         ref: 'User', // Refers to the 'User' model
         required: true,
     },
-    movie: {
+    movie: { // This MUST be 'movie', NOT 'movieId'
         type: Schema.Types.ObjectId,
         ref: 'Movie', // Refers to the 'Movie' model
         required: true,
@@ -34,7 +29,7 @@ const CommentSchema: Schema = new Schema({
         required: true,
         maxlength: [500, 'El comentario no puede exceder los 500 caracteres.'],
     },
-    rating: {
+    rating: { // This MUST be 'rating'
         type: Number,
         required: true,
         min: [1, 'La puntuación debe ser al menos 1.'],

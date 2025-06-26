@@ -1,6 +1,10 @@
 // src/models/Movie.ts
 import { Document, Schema, model } from 'mongoose'; // Import Schema and model
 
+export interface IGenre { // Define this interface
+    id: number;
+    name: string;
+}
 // 1. Define the interface for a new movie document (what you provide)
 export interface IMovieInput {
   title: string;
@@ -10,7 +14,8 @@ export interface IMovieInput {
   vote_average: number;
   poster_path: string;
   backdrop_path?: string; // Optional if not always present
-  genres: number[];
+  genres?: IGenre[];
+  runtime?: number; 
   // Add any other properties you specifically set when creating a new movie
 }
 
@@ -33,7 +38,11 @@ const MovieSchema = new Schema<IMovie>({ // Use IMovie here
   vote_average: { type: Number, default: 0 },
   poster_path: { type: String, default: '' },
   backdrop_path: { type: String }, // Optional field, so no 'required: true'
-  genres: { type: [Number], default: [] }, // Array of numbers
+  genres: [{ // <-- Schema for array of objects
+        id: { type: Number, required: true },
+        name: { type: String, required: true }
+    }],
+  runtime: { type: Number },
 }, {
   timestamps: true, // Adds createdAt and updatedAt fields
 });
