@@ -8,7 +8,7 @@ import movieRoutes from './routes/movieRoutes';
 import commentRoutes from './routes/commentRoutes';
 import AppError from './utils/AppError'; // Adjust path
 import './config/passport'; // 
-import { importPopularMovies } from './utils/movieImporter'; 
+import { importPopularMovies } from './utils/movieImporter';
 
 dotenv.config();
 
