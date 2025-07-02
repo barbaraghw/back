@@ -13,6 +13,7 @@ interface RegisterRequestBody {
   email: string;
   password: string;
   username: string;
+  isCritic?: boolean; 
 }
 interface LoginRequestBody {
   email: string;
@@ -21,8 +22,8 @@ interface LoginRequestBody {
 // Ruta de registro usando el tipo RequestHandler para mayor claridad
 router.post('/register', (async (req: Request<any, any, RegisterRequestBody>, res: Response) => {
     try {
-        const { email, password, username } = req.body; 
-        const newUser = new User({ email, password, username });
+        const { email, password, username, isCritic } = req.body;
+         const newUser = new User({ email, password, username, isCritic: isCritic || false });
         await newUser.save();
         res.status(201).json({ message: 'Usuario registrado exitosamente.' });
    } catch (error: any) {
@@ -66,11 +67,13 @@ router.post('/login', (
                 console.error('JWT_SECRET no está definido en las variables de entorno.');
                 return res.status(500).json({ message: 'Error de configuración del servidor.' });
             }
-
-               const token = jwt.sign({ id: user._id, email: user.email, username: user.username }, secret, { expiresIn: '1h' });
+            
+            console.log(`[LOGIN SUCCESS] User: ${user.username}, isCritic: ${user.isCritic}`);
+            
+               const token = jwt.sign({ id: user._id, email: user.email, username: user.username, isCritic: user.isCritic }, secret, { expiresIn: '1h' });
 
             console.log('Login exitoso, token generado.'); // <--- AÑADE ESTA LÍNEA
-             return res.json({ user: { id: user._id, email: user.email, username: user.username }, token });
+             return res.json({ user: { id: user._id, email: user.email, username: user.username, isCritic: user.isCritic  }, token });
         });
     })(req, res, next);
 });

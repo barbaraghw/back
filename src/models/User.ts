@@ -5,13 +5,15 @@ export interface IUser extends Document {
     email: string;
     password: string;
     username: string;
+    isCritic: boolean;
     comparePassword: (candidatePassword: string) => Promise<boolean>;
 }
 
 const UserSchema: Schema = new Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    username: { type: String, required: true, unique: true, minlength: 3, maxlength: 15  }
+    username: { type: String, required: true, unique: true, minlength: 3, maxlength: 15  },
+    isCritic: { type: Boolean, default: false }
 });
 
 // Hash de la contraseña antes de guardar

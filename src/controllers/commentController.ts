@@ -70,7 +70,11 @@ export const getCommentsForMovie = async (req: Request, res: Response, next: Nex
         }
 
         const comments = await Comment.find({ movie: movieId })
-            .populate('user', 'username _id')
+            .populate({
+                path: 'user',
+                // THIS IS THE CRITICAL LINE TO ADD/MODIFY
+                select: 'username avatar isCritic' // Make sure 'isCritic' is explicitly included here
+            })
             .sort({ createdAt: 1 });
             console.log(`[Backend] Found ${comments.length} comments.`);
             console.log('[BACKEND DEBUG] Comments fetched with ratings:', comments.map(c => c.rating)); // ADD THIS LINE
