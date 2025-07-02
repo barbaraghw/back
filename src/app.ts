@@ -61,7 +61,3 @@ app.get('/', (req, res) => {
   res.send('API de películas en funcionamiento!');
 });
 
-
-app.listen(PORT, () => {
-  console.log(`Servidor escuchando en el puerto ${PORT}`);
-});

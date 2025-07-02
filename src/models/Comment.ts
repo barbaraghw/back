@@ -32,8 +32,8 @@ const CommentSchema: Schema = new Schema({
     rating: { // This MUST be 'rating'
         type: Number,
         required: true,
-        min: [1, 'La puntuación debe ser al menos 1.'],
-        max: [10, 'La puntuación no puede exceder 10.'],
+        min: [0.5, 'La puntuación debe ser al menos 1.'],
+        max: [5, 'La puntuación no puede exceder 5.'],
     },
 }, {
     timestamps: true, // Adds createdAt and updatedAt timestamps automatically
