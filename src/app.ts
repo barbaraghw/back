@@ -25,7 +25,7 @@ mongoose.connect(MONGO_URI)
     console.log('MongoDB conectado exitosamente');
     // Llama a la función de importación de películas aquí
     // Esto se ejecutará una vez que el servidor se conecte a la DB
-    importPopularMovies(5) // Importa 5 páginas de películas al inicio
+    importPopularMovies(15) // Importa 5 páginas de películas al inicio
       .then(importedCount => {
         console.log(`Importación inicial automática completada. Se insertaron ${importedCount} películas nuevas.`);
       })
