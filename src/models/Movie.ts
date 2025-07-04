@@ -19,6 +19,8 @@ export interface IMovieInput {
   // Add any other properties you specifically set when creating a new movie
 }
 
+
+
 // 2. Define the interface for a movie document *retrieved from MongoDB*
 // This extends Document and includes all the fields from IMovieInput
 export interface IMovie extends IMovieInput, Document {

@@ -118,10 +118,11 @@ router.get('/', authenticateJWT, asyncHandler(async (req: Request, res: Response
             query.title = { $regex: search, $options: 'i' };
         }
 
-        if (genreId && typeof genreId === 'string') {
+         if (genreId && typeof genreId === 'string') {
             const genreIdsArray = genreId.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
             if (genreIdsArray.length > 0) {
-                query.genres = { $in: genreIdsArray };
+                // CAMBIADO de `query.genres` a `query['genres.id']`
+                query['genres.id'] = { $in: genreIdsArray }; 
             }
         }
 
