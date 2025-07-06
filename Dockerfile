@@ -2,23 +2,22 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# 1. Copia solo los archivos necesarios para instalar dependencias
+# 1. Copia archivos de dependencias primero
 COPY package.json package-lock.json ./
 
 # 2. Instala dependencias (incluyendo TypeScript)
 RUN npm install --production=false
 
-# 3. Asegura permisos de ejecución para tsc
-RUN chmod +x ./node_modules/.bin/tsc
+# 3. Verificación crítica (opcional para debug)
+RUN echo "=== Verificando tsc ===" && \
+    ls -la ./node_modules/.bin/tsc* && \
+    npx tsc --version
 
-# 4. Verifica que tsc sea ejecutable (opcional, para debug)
-RUN ls -la ./node_modules/.bin/tsc && ./node_modules/.bin/tsc --version
-
-# 5. Copia el resto del código
+# 4. Copia todo el código fuente
 COPY . .
 
-# 6. Compila con la ruta completa a tsc
-RUN rm -rf dist && ./node_modules/.bin/tsc
+# 5. Compilación con npx (¡Solución clave!)
+RUN rm -rf dist && npx tsc
 
 EXPOSE 3000
 CMD ["node", "dist/app.js"]
