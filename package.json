@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "main": "dist/app.js", 
    "scripts": {
-    "build": "npm run clean && tsc", 
-    "start": "node dist/app.js",  
-    "dev": "nodemon --exec ts-node src/app.ts",
-    "clean": "rm -rf dist",        
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "build": "npm run clean && tsc",
+  "start": "node dist/app.js",
+  "dev": "nodemon --exec ts-node src/app.ts",
+  "clean": "rm -rf dist",
+  "test": "echo \"Error: no test specified\" && exit 1"
+},
   "keywords": [],
   "author": "",
   "license": "ISC",
