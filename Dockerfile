@@ -1,23 +1,26 @@
-FROM node:20-slim
+FROM node:20-alpine
 
 WORKDIR /app
 
-# 1. Copia archivos de dependencias primero
-COPY package.json package-lock.json ./
+# Establece permisos correctos desde el inicio
+USER root
+RUN chown -R node:node /app
+USER node
 
-# 2. Instala dependencias (incluyendo TypeScript)
+# Copia archivos de dependencias
+COPY --chown=node:node package.json package-lock.json ./
+
+# Instala dependencias
 RUN npm install --production=false
 
-# 3. Verificación crítica (opcional para debug)
-RUN echo "=== Verificando tsc ===" && \
-    ls -la ./node_modules/.bin/tsc* && \
-    npx tsc --version
+# Verifica TypeScript
+RUN ls -la ./node_modules/.bin/tsc && ./node_modules/.bin/tsc --version
 
-# 4. Copia todo el código fuente
-COPY . .
+# Copia el resto con permisos correctos
+COPY --chown=node:node . .
 
-# 5. Compilación con npx (¡Solución clave!)
-RUN rm -rf dist && npx tsc
+# Compilación
+RUN rm -rf dist && ./node_modules/.bin/tsc
 
 EXPOSE 3000
 CMD ["node", "dist/app.js"]
