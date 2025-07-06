@@ -1,39 +1,43 @@
-# Usa una imagen base oficial de Node.js.
-# Es buena práctica especificar una versión que uses localmente.
-# 'slim' es para un tamaño de imagen más pequeño. Node 20 es una versión LTS reciente.
+# Usa una imagen base oficial de Node.js que sea LTS y 'slim' para un menor tamaño.
 FROM node:20-slim
 
 # Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Copia package.json y package-lock.json (o yarn.lock si lo usas) primero.
-# Esto aprovecha la caché de Docker: si estos archivos no cambian,
-# el paso de 'npm install' no se ejecutará de nuevo, lo que acelera los builds.
+# Copia package.json y package-lock.json primero.
+# Esto es para aprovechar la caché de Docker para el paso de instalación.
 COPY package.json package-lock.json ./
 
-# Instala todas las dependencias, incluyendo las de desarrollo.
-# Aquí no usamos --production=false porque el 'npm install' básico en un Dockerfile
-# sin el flag --production instala TODAS las dependencias por defecto.
-# Esto asegura que 'typescript' se instale y 'tsc' esté disponible.
-RUN npm install
+# --- INICIO: PASOS DE INSTALACIÓN ROBUSTOS ---
+
+# 1. Limpia la caché de npm para evitar cualquier módulo corrupto o incompleto en caché.
+RUN npm cache clean --force
+
+# 2. Reinstala todas las dependencias (incluyendo devDependencies) con fuerza.
+#    --legacy-peer-deps puede ayudar a evitar problemas con dependencias pares.
+#    --force forza la reinstalación de todos los paquetes.
+RUN npm install --production=false --force --legacy-peer-deps
+
+# 3. Asegura explícitamente que el binario 'tsc' sea ejecutable.
+#    Esto es un "seguro" extra si por alguna razón los permisos no se establecieron correctamente.
+#    'sh -c' es para asegurar que el comando se interprete en un shell.
+#    'find' busca el archivo 'tsc' dentro de node_modules/.bin y le da permisos de ejecución.
+#    El '|| true' evita que el build falle si 'tsc' aún no se encuentra (aunque debería estar).
+RUN sh -c "find ./node_modules/.bin -name 'tsc' -exec chmod +x {} +" || true
+
+# --- FIN: PASOS DE INSTALACIÓN ROBUSTOS ---
 
 # Copia el resto del código de tu aplicación
 COPY . .
 
 # Ejecuta el script 'build' definido en tu package.json.
-# Esto compilará tu TypeScript a JavaScript (típicamente en la carpeta 'dist').
+# Esto compilará tu TypeScript a JavaScript.
 RUN npm run build
 
-# Opcional: Si quieres una imagen final más pequeña para producción,
-# puedes eliminar las devDependencies después del build.
-# RUN npm prune --production
-
-# Expone el puerto en el que tu aplicación Node.js escucha.
-# Tu código debe escuchar en process.env.PORT (que Railway inyectará)
-# o un puerto predeterminado como 3000.
+# Expone el puerto en el que tu aplicación escucha.
 EXPOSE 3000
 
 # Comando para ejecutar tu aplicación JavaScript compilada.
-# Asegúrate de que "dist/app.js" sea la ruta correcta a tu archivo principal compilado
-# dentro del contenedor (relativa a /app).
+# ASEGÚRATE de que "dist/app.js" es la ruta correcta a tu archivo principal compilado
+# dentro del contenedor (relativa a /app). NO uses rutas de Windows/locales aquí.
 CMD ["node", "dist/app.js"]
