@@ -4,28 +4,41 @@ FROM node:20-slim
 # Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Copia package.json y package-lock.json primero.
-# Esto es para aprovechar la caché de Docker para el paso de instalación.
+# Copia package.json y package-lock.json (o yarn.lock si lo usas) primero.
+# Esto aprovecha la caché de Docker para el paso de instalación.
 COPY package.json package-lock.json ./
 
-# --- INICIO: PASOS DE INSTALACIÓN ROBUSTOS ---
-
-# 1. Limpia la caché de npm para evitar cualquier módulo corrupto o incompleto en caché.
+# --- PASOS DE INSTALACIÓN ROBUSTOS ---
 RUN npm cache clean --force
-
-# 2. Reinstala todas las dependencias (incluyendo devDependencies) con fuerza.
-#    --legacy-peer-deps puede ayudar a evitar problemas con dependencias pares.
-#    --force forza la reinstalación de todos los paquetes.
 RUN npm install --production=false --force --legacy-peer-deps
+# --- FIN PASOS DE INSTALACIÓN ROBUSTOS ---
 
-# 3. Asegura explícitamente que el binario 'tsc' sea ejecutable.
-#    Esto es un "seguro" extra si por alguna razón los permisos no se establecieron correctamente.
-#    'sh -c' es para asegurar que el comando se interprete en un shell.
-#    'find' busca el archivo 'tsc' dentro de node_modules/.bin y le da permisos de ejecución.
-#    El '|| true' evita que el build falle si 'tsc' aún no se encuentra (aunque debería estar).
-RUN sh -c "find ./node_modules/.bin -name 'tsc' -exec chmod +x {} +" || true
 
-# --- FIN: PASOS DE INSTALACIÓN ROBUSTOS ---
+# --- INICIO: DIAGNÓSTICOS AVANZADOS ---
+
+# 1. Lista el contenido de node_modules/.bin para verificar si tsc está allí
+RUN echo "--- Listing node_modules/.bin contents ---"
+RUN ls -la ./node_modules/.bin/ || true
+
+# 2. Verifica la existencia de tsc y sus permisos exactos
+RUN echo "--- Checking tsc permissions ---"
+RUN ls -la ./node_modules/.bin/tsc || echo "tsc not found at expected path."
+
+# 3. Muestra el PATH actual del shell (importante para "command not found")
+RUN echo "--- Current PATH variable ---"
+RUN echo $PATH
+
+# 4. Intenta ejecutar tsc directamente usando su ruta absoluta
+#    Esto nos dirá si es un problema de PATH o de ejecución del binario.
+RUN echo "--- Attempting direct tsc execution ---"
+RUN /app/node_modules/.bin/tsc --version || echo "Direct execution of tsc failed."
+
+# 5. Muestra el usuario actual
+RUN echo "--- Current user ---"
+RUN whoami
+
+# --- FIN: DIAGNÓSTICOS AVANZADOS ---
+
 
 # Copia el resto del código de tu aplicación
 COPY . .
@@ -38,6 +51,4 @@ RUN npm run build
 EXPOSE 3000
 
 # Comando para ejecutar tu aplicación JavaScript compilada.
-# ASEGÚRATE de que "dist/app.js" es la ruta correcta a tu archivo principal compilado
-# dentro del contenedor (relativa a /app). NO uses rutas de Windows/locales aquí.
 CMD ["node", "dist/app.js"]
