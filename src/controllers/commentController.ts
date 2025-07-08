@@ -160,6 +160,10 @@ export const createComment = async (req: Request, res: Response, next: NextFunct
             return next(new AppError('Por favor, proporciona el ID de la película, el texto y la puntuación.', 400));
         }
 
+        if (text.length > 300) {
+            return next(new AppError('El comentario no puede exceder los 300 caracteres.', 400));
+        }
+        
         if (typeof rating !== 'number' || rating < 0.5 || rating > 5) {
             return next(new AppError('La puntuación debe ser un número entre 1 y 10.', 400));
         }
@@ -198,6 +202,10 @@ export const updateComment = async (req: Request, res: Response, next: NextFunct
         }
         if (rating !== undefined && (typeof rating !== 'number' || rating < 0.5 || rating > 5)) {
             return next(new AppError('La puntuación debe ser un número entre 1 y 10.', 400));
+        }
+
+        if (text !== undefined && text.length > 300) {
+            return next(new AppError('El comentario no puede exceder los 300 caracteres.', 400));
         }
 
         const comment = await Comment.findById(id);

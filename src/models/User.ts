@@ -10,9 +10,9 @@ export interface IUser extends Document {
 }
 
 const UserSchema: Schema = new Schema({
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    username: { type: String, required: true, unique: true, minlength: 3, maxlength: 15  },
+    email: { type: String, required: true, unique: true, trim: true,minlength: [5, 'El email debe tener al menos 5 caracteres.'], maxlength: [50, 'El email no puede exceder los 50 caracteres.'], match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Por favor, introduce un email válido.'] },
+    password: { type: String, required: true, minlength: [3, 'La contraseña debe tener al menos 3 caracteres.']},
+    username: { type: String, required: true, unique: true,  minlength: [3, 'El nombre de usuario debe tener al menos 3 caracteres.'], maxlength: [30, 'El nombre de usuario no puede exceder los 30 caracteres.'], },
     isCritic: { type: Boolean, default: false }
 });
 

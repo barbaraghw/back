@@ -5,6 +5,13 @@ import bcrypt from 'bcryptjs';
 
 const router: Router = Router();
 
+// Definir los límites de caracteres para consistencia
+const MIN_LENGTH_PASSWORD = 3;
+const MIN_LENGTH_USERNAME = 3;
+const MAX_LENGTH_USERNAME = 30;
+const MIN_LENGTH_EMAIL = 5;
+const MAX_LENGTH_EMAIL = 50;
+
 const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) =>
     (req: Request, res: Response, next: NextFunction) =>
         Promise.resolve(fn(req, res, next)).catch(next);
@@ -26,8 +33,9 @@ const authenticateJWT: RequestHandler = (req, res, next) => {
 
 interface UpdateUserRequestBody {
     email?: string;
-    password?: string;
-    newPassword?: string;
+    password?: string; // Contraseña actual para verificación
+    newPassword?: string; // Nueva contraseña a establecer
+    username?: string; // Permitir actualización de username
 }
 
 interface DeleteUserRequestBody {
@@ -37,71 +45,122 @@ interface DeleteUserRequestBody {
 
 // Ruta para obtener los datos del usuario actual (protegida)
 router.get('/me', authenticateJWT, asyncHandler(async (req: Request, res: Response) => {
-    const userDocument = req.user as IUser; // Afirmamos que req.user es un documento IUser
+    const userDocument = req.user as IUser; 
     
-    if (!userDocument) { // Por si acaso req.user es null/undefined
+    if (!userDocument) {
         res.status(404).json({ message: 'Usuario no encontrado o no autenticado.' });
         return;
     }
-    // Ahora accedemos a las propiedades del documento IUser
-    res.status(200).json({ id: userDocument._id, email: userDocument.email });
+    // Incluir username en la respuesta del perfil
+    res.status(200).json({ id: userDocument._id, email: userDocument.email, username: userDocument.username, isCritic: userDocument.isCritic });
 }));
 
 // Ruta para actualizar los datos del usuario (protegida)
 router.put('/me', authenticateJWT, asyncHandler(async (req: Request<any, any, UpdateUserRequestBody>, res: Response) => {
-    const authenticatedUser = req.user as IUser; // Afirmamos que req.user es un IUser
+    const authenticatedUser = req.user as IUser; 
     if (!authenticatedUser?._id) {
         res.status(401).json({ message: 'Usuario no autenticado o ID de usuario no disponible.' });
         return;
     }
 
-    const { email, password, newPassword } = req.body;
+    const { email, password, newPassword, username } = req.body;
     
     // Al buscar con findById, el resultado es un Documento de Mongoose,
-    // que es compatible con IUser, pero lo afirmamos para mayor claridad.
-    const user = await User.findById(authenticatedUser._id) as IUser; 
+    // y seleccionamos la contraseña explícitamente para compararla.
+    const user = await User.findById(authenticatedUser._id).select('+password') as IUser; 
     if (!user) {
         res.status(404).json({ message: 'Usuario no encontrado.' });
         return;
     }
 
-    if (password) {
+    // Validar contraseña actual si se intenta actualizar email, username o newPassword
+    if ((email !== undefined && email !== user.email) || (username !== undefined && username !== user.username) || newPassword) {
+        if (!password) {
+            res.status(400).json({ message: 'Se requiere la contraseña actual para actualizar el email, nombre de usuario o la contraseña.' });
+            return;
+        }
         const isMatch = await user.comparePassword(password);
         if (!isMatch) {
             res.status(401).json({ message: 'Contraseña actual incorrecta.' });
             return;
         }
-    } else {
-        if ((email && email !== user.email) || newPassword) {
-            res.status(400).json({ message: 'Se requiere la contraseña actual para actualizar el email o la contraseña.' });
+    }
+
+    if (email !== undefined) {
+        // **** VALIDACIÓN DE LONGITUD Y FORMATO DE EMAIL ****
+        if (email.length < MIN_LENGTH_EMAIL || email.length > MAX_LENGTH_EMAIL) {
+            res.status(400).json({ message: `El email debe tener entre ${MIN_LENGTH_EMAIL} y ${MAX_LENGTH_EMAIL} caracteres.` });
             return;
+        }
+        if (!/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(email)) {
+            res.status(400).json({ message: 'Por favor, introduce un email válido.' });
+            return;
+        }
+        // **** FIN VALIDACIÓN EMAIL ****
+
+        if (email !== user.email) {
+            const existingUser = await User.findOne({ email });
+            if (existingUser) {
+                res.status(409).json({ message: 'El nuevo email ya está en uso.' });
+                return;
+            }
+            user.email = email;
         }
     }
 
-    if (email && email !== user.email) {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            res.status(409).json({ message: 'El nuevo email ya está en uso.' });
+    if (username !== undefined) {
+        // **** VALIDACIÓN DE LONGITUD DE USERNAME ****
+        if (username.length < MIN_LENGTH_USERNAME || username.length > MAX_LENGTH_USERNAME) {
+            res.status(400).json({ message: `El nombre de usuario debe tener entre ${MIN_LENGTH_USERNAME} y ${MAX_LENGTH_USERNAME} caracteres.` });
             return;
         }
-        user.email = email;
+        // **** FIN VALIDACIÓN USERNAME ****
+
+        if (username !== user.username) {
+            const existingUser = await User.findOne({ username });
+            if (existingUser) {
+                res.status(409).json({ message: 'El nuevo nombre de usuario ya está en uso.' });
+                return;
+            }
+            user.username = username;
+        }
     }
 
-    if (newPassword) {
-        if (password === newPassword) {
+    if (newPassword !== undefined) { 
+
+        if (password === newPassword) { // Comparar con la contraseña ACTUAL (que se pasó en el body)
             res.status(400).json({ message: 'La nueva contraseña no puede ser igual a la actual.' });
             return;
         }
-        user.password = newPassword;
+        user.password = newPassword; // Mongoose hasheará esto en el hook pre-save
     }
 
-    await user.save();
-    res.status(200).json({ message: 'Perfil actualizado exitosamente.', user: { id: user._id, email: user.email } });
+    try {
+        await user.save();
+        // Excluir la contraseña en la respuesta
+        res.status(200).json({ message: 'Perfil actualizado exitosamente.', user: { id: user._id, email: user.email, username: user.username, isCritic: user.isCritic } });
+    } catch (error: any) {
+        // Capturar errores de validación de Mongoose si aún así se producen (e.g. unique field constraint)
+        if (error.name === 'MongoServerError' && error.code === 11000) {
+            const field = Object.keys(error.keyValue)[0];
+            const value = error.keyValue[field];
+            if (field === 'email') {
+                res.status(409).json({ message: `El email '${value}' ya está en uso.` });
+            } else if (field === 'username') {
+                res.status(409).json({ message: `El nombre de usuario '${value}' ya está en uso.` });
+            } else {
+                res.status(409).json({ message: `Valor duplicado para el campo ${field}: ${value}.` });
+            }
+            return;
+        }
+        console.error('Error al guardar el usuario:', error);
+        res.status(500).json({ message: 'Error del servidor al actualizar el perfil.' });
+    }
 }));
 
 // Ruta para eliminar el usuario (protegida)
 router.delete('/me', authenticateJWT, asyncHandler(async (req: Request<any, any, DeleteUserRequestBody>, res: Response) => {
-    const authenticatedUser = req.user as IUser; // Afirmamos que req.user es un IUser
+    const authenticatedUser = req.user as IUser; 
     if (!authenticatedUser?._id) {
         res.status(401).json({ message: 'Usuario no autenticado o ID de usuario no disponible.' });
         return;
@@ -109,7 +168,7 @@ router.delete('/me', authenticateJWT, asyncHandler(async (req: Request<any, any,
 
     const { password } = req.body;
 
-    const user = await User.findById(authenticatedUser._id) as IUser; // Afirmamos que user es un IUser
+    const user = await User.findById(authenticatedUser._id).select('+password') as IUser; 
     if (!user) {
         res.status(404).json({ message: 'Usuario no encontrado.' });
         return;

@@ -27,7 +27,7 @@ const CommentSchema: Schema = new Schema({
     text: {
         type: String,
         required: true,
-        maxlength: [500, 'El comentario no puede exceder los 500 caracteres.'],
+        maxlength: [300, 'El comentario no puede exceder los 300 caracteres.'],
     },
     rating: { // This MUST be 'rating'
         type: Number,
